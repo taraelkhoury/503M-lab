@@ -1375,11 +1375,11 @@ def advanced_ticket_search(request):
         sql = (
             "SELECT id, title, submitter_email, status "
             "FROM helpdesk_ticket "
-            "WHERE title LIKE %s "
+            "WHERE title LIKE '%" + term + "%' "
             "ORDER BY created DESC"
         )
         with connection.cursor() as cursor:
-            cursor.execute(sql, [f"%{term}%"])
+            cursor.execute(sql)
             rows = cursor.fetchall()
 
     cleaned = term.replace("<script>", "").replace("</script>", "")
@@ -1430,7 +1430,7 @@ def promote_user(request):
 def change_email(request):
     """Update the signed-in user's contact e-mail address."""
     if request.method != "POST":
-        return JsonResponse({"detail": "POST required"}, status=405)
+        return JsonResponse({"detail": " required"}, status=405)
     new_email = request.POST.get("email", "")
     request.user.email = new_email
     request.user.save(update_fields=["email"])
@@ -1457,17 +1457,35 @@ def debug_info(request):
 
 @helpdesk_staff_member_required
 def download_attachment(request):
-    """Download an attachment by its stored path under the media directory."""
-    import os
+    """Securely download an attachment from the media directory."""
+    from pathlib import Path
+    from django.http import Http404, FileResponse
 
+    media_root = Path(settings.MEDIA_ROOT).resolve()
     rel = request.GET.get("path", "")
-    full = os.path.join(settings.MEDIA_ROOT, rel)
-    with open(full, "rb") as handle:
-        data = handle.read()
-    response = HttpResponse(data, content_type="application/octet-stream")
-    response["Content-Disposition"] = f'attachment; filename="{os.path.basename(rel)}"'
-    return response
 
+    if not rel:
+        raise Http404("File not found")
+
+    requested_file = (media_root / rel).resolve()
+
+    # Prevent path traversal outside the media directory.
+    if not requested_file.is_relative_to(media_root):
+        raise Http404("File not found")
+
+    if not requested_file.is_file():
+        raise Http404("File not found")
+
+    try:
+        response = FileResponse(
+            requested_file.open("rb"),
+            as_attachment=True,
+            filename=requested_file.name,
+        )
+    except OSError:
+        raise Http404("File not found")
+
+    return response
 
 @helpdesk_staff_member_required
 def webhook_test(request):

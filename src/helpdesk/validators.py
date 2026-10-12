@@ -1,31 +1,48 @@
 # validators.py
 #
-# validators for file uploads, etc.
+# Validators for file uploads.
 
+from pathlib import Path
+
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
 from helpdesk import settings as helpdesk_settings
 
-# TODO: can we use the builtin Django validator instead?
-# see:
-# https://docs.djangoproject.com/en/4.0/ref/validators/#fileextensionvalidator
-
 
 def validate_file_extension(value):
-    import os
-
-    from django.core.exceptions import ValidationError
-
-    ext = os.path.splitext(value.name)[1]  # [0] returns path+filename
-    # TODO: we might improve this with more thorough checks of file types
-    # rather than just the extensions.
-
     if not helpdesk_settings.HELPDESK_VALIDATE_ATTACHMENT_TYPES:
         return
 
-    # TODO: one more check in case it is a file with no extension; we
-    # should always allow that?
-    if ext.lower() not in helpdesk_settings.HELPDESK_VALID_EXTENSIONS and not (
-        ext.lower() == "" or ext.lower() == "."
-    ):
-        raise ValidationError(_("Unsupported file extension: ") + ext.lower())
+    filename = value.name
+
+    # Reject filenames containing directory separators.
+    if "/" in filename or "\\" in filename:
+        raise ValidationError(_("Invalid filename."))
+
+    # Reject filenames with multiple extensions or no extension.
+    if filename.count(".") != 1 or filename.startswith("."):
+        raise ValidationError(_("Invalid filename or multiple extensions."))
+
+    # Check the final extension against the allowlist.
+    ext = Path(filename).suffix.lower()
+
+    if ext not in helpdesk_settings.HELPDESK_VALID_EXTENSIONS:
+        raise ValidationError(_("Unsupported file extension: ") + ext)
+
+def validate_file_content(value):
+    from django.core.exceptions import ValidationError
+    from django.utils.translation import gettext as _
+
+    filename = value.name.lower()
+
+    if filename.endswith(".png"):
+        position = value.tell()
+        try:
+            value.seek(0)
+            signature = value.read(8)
+        finally:
+            value.seek(position)
+
+        if signature != b"\x89PNG\r\n\x1a\n":
+            raise ValidationError(_("Invalid PNG file content."))

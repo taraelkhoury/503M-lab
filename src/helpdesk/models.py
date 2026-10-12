@@ -1290,16 +1290,23 @@ class FollowUpAttachment(Attachment):
     )
 
     def attachment_path(self, filename):
-        path = f"helpdesk/attachments/{self.followup.ticket.ticket_for_url}-{self.followup.ticket.secret_key}/{self.followup.id}"
-        att_path = os.path.join(settings.MEDIA_ROOT, path)
-        if (
-            settings.STORAGES == "django.core.files.storage.FileSystemStorage"
-            and not os.path.exists(att_path)
-        ):
-            os.makedirs(att_path, helpdesk_settings.HELPDESK_ATTACHMENT_DIR_PERMS)
-        return os.path.join(path, filename)
+        import uuid
+        from pathlib import Path
 
+        path = (
+            f"helpdesk/attachments/"
+            f"{self.followup.ticket.ticket_for_url}-"
+            f"{self.followup.ticket.secret_key}/"
+            f"{self.followup.id}"
+        )
 
+        # Extract the validated extension.
+        extension = Path(filename).suffix.lower()
+
+        # Generate a unique filename.
+        safe_filename = f"{uuid.uuid4().hex}{extension}"
+
+        return os.path.join(path, safe_filename)
 class KBIAttachment(Attachment):
     kbitem = models.ForeignKey(
         "KBItem",

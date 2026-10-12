@@ -47,7 +47,7 @@ from helpdesk.settings import (
 )
 from helpdesk.signals import new_ticket_done
 from helpdesk.user import HelpdeskUser
-from helpdesk.validators import validate_file_extension
+from helpdesk.validators import validate_file_extension, validate_file_content
 
 if helpdesk_settings.HELPDESK_KB_ENABLED:
     from helpdesk.models import KBItem
@@ -342,7 +342,7 @@ class AbstractTicketForm(CustomFieldMixin, forms.Form):
                 "a document (.pdf, .docx, or .odt), "
                 "or screenshot (.png or .jpg) may be uploaded."
             ),
-            validators=[validate_file_extension],
+            validators=[validate_file_extension, validate_file_content],
         )
 
     class Media:
